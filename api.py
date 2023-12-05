@@ -1,12 +1,9 @@
 import chess
 import numpy as np
-
-board = chess.Board()
-
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-
+board = chess.Board()
 def getMobility(color):
     attacked = chess.SquareSet()
     for attacker in chess.SquareSet(board.occupied_co[color]):
@@ -164,10 +161,10 @@ def mini(depth,alpha,beta):
     return beta,best_move
 
 
-
 # Sample function that processes the parameters
 def best_move(fen, turn, depth):
-    board = chess.Board(fen)
+    board.set_fen(fen)
+    
     if turn == 1:
         score,move = maxi(depth,-float('inf'),float('inf'))
     else:
@@ -175,6 +172,8 @@ def best_move(fen, turn, depth):
     return {
         "best_move": move.uci(),
     }
+
+
 
 @app.route('/get_best_move', methods=['GET'])
 def get_request():
