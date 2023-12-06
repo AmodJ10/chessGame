@@ -2,13 +2,17 @@ const express = require("express");
 const { Server } = require("socket.io");
 const { v4: uuidV4 } = require("uuid");
 const http = require("http");
+const mongoose = require("mongoose");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const { User } = require("./database");
 
 const app = express(); // initialize express
 
 const server = http.createServer(app);
 
 // set port to value received from environment variable or 8080 if null
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 8000;
 
 // upgrade http server to websocket server
 const io = new Server(server, {
@@ -21,12 +25,41 @@ const rooms = new Map();
 io.on("connection", (socket) => {
   console.log(socket.id, "connected");
 
-  // socket.on('username')
-  socket.on("username", (username) => {
-    console.log(username);
-    socket.data.username = username;
-  });
+  // Handle user authentication
+  socket.on("authenticate", async ({ username, password }) => {
+    try {
+      // Check if the user exists in the database
+      const user = await User.findOne({ username });
 
+      if (user) {
+        // User exists, check the password
+        if (user.password === password) {
+          // Password is correct, continue with the application
+          socket.emit("username", username);
+          console.log(user);
+          setUsernameSubmitted(true);
+          setShowModal(false);
+        } else {
+          // Password is incorrect
+          console.log("Wrong")
+          socket.emit("authenticationError", "Incorrect password");
+        }
+      } else {
+        // User does not exist, create a new user
+        const newUser = new User({ username, password });
+        await newUser.save();
+        socket.emit("username", username);
+        setUsernameSubmitted(true);
+        setShowModal(false);
+      }
+    } catch (error) {
+      console.error("Authentication error:", error.message);
+      socket.emit(
+        "authenticationError",
+        "An error occurred during authentication"
+      );
+    }
+  });
   // createRooms
   socket.on("createRoom", async (callback) => {
     // callback here refers to the callback function from the client passed as data
@@ -97,15 +130,15 @@ io.on("connection", (socket) => {
     // emit an 'opponentJoined' event to the room to tell the other player that an opponent has joined
     socket.to(args.roomId).emit("opponentJoined", roomUpdate);
   });
-  socket.on('move', (data) => {
-    // emit to all sockets in the room except the emitting socket.
-    socket.to(data.room).emit('move', data.move);
+  socket.on("move", (data) => {
+    socket.to(data.room).emit("move", data.move);
   });
 
   socket.on("disconnect", () => {
     const gameRooms = Array.from(rooms.values()); // <- 1
 
-    gameRooms.forEach((room) => { // <- 2
+    gameRooms.forEach((room) => {
+      // <- 2
       const userInRoom = room.players.find((player) => player.id === socket.id); // <- 3
 
       if (userInRoom) {
@@ -133,7 +166,6 @@ io.on("connection", (socket) => {
     rooms.delete(data.roomId); // <- 4 delete room from rooms map
   });
 });
-
 
 server.listen(port, () => {
   console.log(`listening on *:${port}`);

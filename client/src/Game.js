@@ -1,79 +1,111 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { Chessboard } from "react-chessboard";
 import { Chess } from "chess.js";
-import CustomDialog from "./components/CustomDialog";
 import socket from "./socket";
-import {
-  Card,
-  CardContent,
-  List,
-  ListItem,
-  ListItemText,
-  ListSubheader,
-  Stack,
-  Typography,
-  Box,
-} from "@mui/material";
+import axios from "axios"; 
+import "./Game.css"; 
 
 function Game({ players, room, orientation, cleanup }) {
-  const chess = useMemo(() => new Chess(), []); // <- 1
-  const [fen, setFen] = useState(chess.fen()); // <- 2
-  const [over, setOver] = useState("");
+ const chess = useMemo(() => new Chess(), []);
+ const [fen, setFen] = useState(chess.fen());
+ const [over, setOver] = useState("");
+ const [singlePlayer, setSinglePlayer] = useState(false); 
 
-  const makeAMove = useCallback(
-    (move) => {
-      try {
-        const result = chess.move(move); // update Chess instance
-        setFen(chess.fen()); // update fen state to trigger a re-render
-  
-        console.log("over, checkmate", chess.isGameOver(), chess.isCheckmate());
-  
-        if (chess.isGameOver()) { // check if move led to "game over"
-          if (chess.isCheckmate()) { // if reason for game over is a checkmate
-            // Set message to checkmate. 
-            setOver(
-              `Checkmate! ${chess.turn() === "w" ? "black" : "white"} wins!`
-            ); 
-            // The winner is determined by checking which side made the last move
-          } else if (chess.isDraw()) { // if it is a draw
-            setOver("Draw"); // set message to "Draw"
-          } else {
-            setOver("Game over");
-          }
+ const makeAMove = useCallback(
+  (move) => {
+    try {
+      const result = chess.move(move);
+      setFen(chess.fen());
+
+      console.log("Move details:", move);
+      console.log("Chess.js result:", result);
+
+      if (chess.isGameOver()) {
+        if (chess.isCheckmate()) {
+          setOver(
+            `Checkmate! ${chess.turn() === "w" ? "black" : "white"} wins!`
+          );
+        } else if (chess.isDraw()) {
+          setOver("Draw");
+        } else {
+          setOver("Game over");
         }
-  
-        return result;
-      } catch (e) {
-        return null;
-      } // null if the move was illegal, the move object if the move was legal
-    },
-    [chess]
-  );
+      }
 
-  // onDrop function
+      return result;
+    } catch (e) {
+      console.error("Error in makeAMove:", e);
+      return null;
+    }
+  },
+  [chess]
+);
+
+ const fetchAndApplyAIMove = async () => {
+  try {
+    const response = await axios.get("http://127.0.0.1:5000/get_best_move", {
+      params: {
+        fen: chess.fen(),
+        turn: '0',
+        depth: '3'
+      }
+    });
+
+    console.log("AI Move Full Response:", response);
+
+    if (response && response.data) {
+      const aiMove = response.data.best_move;
+
+      if (aiMove) {
+        console.log("AI Move:", aiMove);
+
+        const result = makeAMove(aiMove);
+
+        if (result !== null) {
+          console.log("Make a Move Result:", result);
+        } else {
+          console.error("makeAMove returned null");
+        }
+      } else {
+        console.error("AI move is undefined or null");
+      }
+    } else {
+      console.error("Response or response.data is undefined");
+    }
+  } catch (error) {
+    console.error("Failed to fetch AI move:", error);
+  }
+};
+
+
+
   function onDrop(sourceSquare, targetSquare) {
-    // orientation is either 'white' or 'black'. game.turn() returns 'w' or 'b'
-    if (chess.turn() !== orientation[0]) return false; // <- 1 prohibit player from moving piece of other player
+    if (chess.turn() !== orientation[0]) return false;
 
-    if (players.length < 2) return false; // <- 2 disallow a move if the opponent has not joined
+    if (!singlePlayer && players.length < 2) return false;
 
+  
     const moveData = {
       from: sourceSquare,
       to: targetSquare,
       color: chess.turn(),
-      promotion: "q", // promote to queen where possible
+      promotion: "q",
     };
 
     const move = makeAMove(moveData);
 
-    // illegal move
     if (move === null) return false;
 
-    socket.emit("move", { // <- 3 emit a move event.
+    if (singlePlayer) {
+      fetchAndApplyAIMove();
+    }
+
+    console.log("Emitting move:", move);
+    socket.emit("move", { 
       move,
       room,
-    }); // this event will be transmitted to the opponent via the server
-
+    }); 
+    
     return true;
   }
 
@@ -84,8 +116,9 @@ function Game({ players, room, orientation, cleanup }) {
   }, [makeAMove]);
 
   useEffect(() => {
-    socket.on('playerDisconnected', (player) => {
-      setOver(`${player.username} has disconnected`); // set game over
+    socket.on('playerDisconnected', (players) => {
+      console.log(players.username)
+      setOver(`${players.username} has disconnected`); // set game over
     });
   }, []);
 
@@ -96,52 +129,43 @@ function Game({ players, room, orientation, cleanup }) {
       }
     });
   }, [room, cleanup]);
-  
- // Game component returned jsx
-return (
-  <Stack>
-    <Card>
-      <CardContent>
-        <Typography variant="h5">Room ID: {room}</Typography>
-      </CardContent>
-    </Card>
-    <Stack flexDirection="row" sx={{ pt: 2 }}>
-      <div className="board" style={{
-        maxWidth: 600,
-        maxHeight: 600,
-        flexGrow: 1,
-      }}>
+
+  return (
+    <div className="game-container">
+      <div className="game-info">
+        <h2>Room ID: {room}</h2>
+        <button onClick={() => setSinglePlayer(!singlePlayer)}>
+        {singlePlayer ? "Multiplayer" : "Single Player"}
+      </button>
+      </div>
+      <div className="board-container">
         <Chessboard
           position={fen}
           onPieceDrop={onDrop}
           boardOrientation={orientation}
+          boardWidth={700}
         />
       </div>
       {players.length > 0 && (
-        <Box>
-          <List>
-            <ListSubheader>Players</ListSubheader>
+        <div className="players-container">
+          <h3>Players</h3>
+          <ul>
             {players.map((p) => (
-              <ListItem key={p.id}>
-                <ListItemText primary={p.username} />
-              </ListItem>
+              <li key={p.id}>{p.username}</li>
             ))}
-          </List>
-        </Box>
+          </ul>
+        </div>
       )}
-    </Stack>
-    <CustomDialog // Game Over CustomDialog
-        open={Boolean(over)}
-        title={over}
-        contentText={over}
-        handleContinue={() => {
-          socket.emit("closeRoom", { roomId: room });
-          cleanup();
-        }}
-      />
-  </Stack>
-);
-
+      {over && (
+        <div className="game-over-dialog">
+          <h2>{over}</h2>
+          <button onClick={() => cleanup()}>Continue</button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default Game;
+
+

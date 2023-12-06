@@ -1,0 +1,74 @@
+body {
+  background-color: #b3c4ba;
+  font-family: Arial, sans-serif;
+ }
+ 
+ .init-game-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  height: 100vh;
+ }
+
+ .GIF{
+  height: 600px;
+  width: 600px;
+  /* position: absolute; */
+  display: flex;
+  justify-content: center;
+ }
+ 
+ .start-game-button,
+ .join-game-button {
+  background-color: #6A89CC;
+  color: #fff;
+  font-size: 25px;
+  padding: 20px 40px;
+  margin: 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+ }
+ 
+ .start-game-button:hover,
+ .join-game-button:hover {
+  background-color: #333;
+ }
+ 
+ .room-input {
+  margin: 10px 0;
+  padding: 5px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+ }
+ 
+ .room-error {
+  color: red;
+  margin: 5px 0;
+ }
+ 
+ .react-modal-overlay {
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+ }
+ .mainPage{
+  background-repeat: red;
+ }
+ 
+ .react-modal-content {
+  background-color: #fff;
+  border: 1px solid #ccc;
+  padding: 20px;
+  width: 400px;
+  border-radius: 5px;
+ }
+ 
+ .react-modal-title {
+  margin: 0 0 10px;
+  font-size: 20px;
+ }
